@@ -177,6 +177,7 @@ const fn poseidon_d1_witness_bus_dim(witness_ctl_scale: u32) -> Option<u32> {
     match witness_ctl_scale {
         1 => Some(1),
         5 => Some(5),
+        8 => Some(8),
         _ => None,
     }
 }
@@ -1152,6 +1153,8 @@ fn supported_poseidon2(config: Poseidon2Config) -> bool {
         Poseidon2Config::BABY_BEAR_D4_W24,
         Poseidon2Config::BABY_BEAR_D4_W32,
         Poseidon2Config::KOALA_BEAR_D1_W16,
+        Poseidon2Config::KOALA_BEAR_D1_W24,
+        Poseidon2Config::KOALA_BEAR_D1_W24.for_challenger(),
         Poseidon2Config::KOALA_BEAR_D4_W16,
         Poseidon2Config::KOALA_BEAR_D4_W24,
         Poseidon2Config::KOALA_BEAR_D1_W32,
@@ -1646,6 +1649,21 @@ impl<SC> RegisterPoseidon2ForExt<4, SC> for ()
 where
     SC: StarkGenericConfig + 'static + Send + Sync,
     Val<SC>: StarkField + BinomiallyExtendable<4>,
+    SymbolicExpressionExt<Val<SC>, SC::Challenge>:
+        Algebra<SymbolicExpression<Val<SC>>> + Algebra<SC::Challenge>,
+{
+    fn register_poseidon2(prover: &mut BatchStarkProver<SC>, config: Poseidon2Config) {
+        prover.register_table_prover(Box::new(Poseidon2Prover::new(
+            config,
+            ConstraintProfile::Standard,
+        )));
+    }
+}
+
+impl<SC> RegisterPoseidon2ForExt<8, SC> for ()
+where
+    SC: StarkGenericConfig + 'static + Send + Sync,
+    Val<SC>: StarkField + BinomiallyExtendable<4> + BinomiallyExtendable<8>,
     SymbolicExpressionExt<Val<SC>, SC::Challenge>:
         Algebra<SymbolicExpression<Val<SC>>> + Algebra<SC::Challenge>,
 {

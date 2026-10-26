@@ -45,12 +45,14 @@ const POSEIDON1_CONFIGS: [Poseidon1Config; 12] = [
     Poseidon1Config::GOLDILOCKS_D2_W8.for_challenger(),
 ];
 
-const POSEIDON2_CONFIGS: [Poseidon2Config; 21] = [
+const POSEIDON2_CONFIGS: [Poseidon2Config; 23] = [
     Poseidon2Config::BABY_BEAR_D1_W16,
     Poseidon2Config::BABY_BEAR_D4_W16,
     Poseidon2Config::BABY_BEAR_D4_W24,
     Poseidon2Config::BABY_BEAR_D4_W32,
     Poseidon2Config::KOALA_BEAR_D1_W16,
+    Poseidon2Config::KOALA_BEAR_D1_W24,
+    Poseidon2Config::KOALA_BEAR_D1_W24.for_challenger(),
     Poseidon2Config::KOALA_BEAR_D4_W16,
     Poseidon2Config::KOALA_BEAR_D4_W24,
     Poseidon2Config::KOALA_BEAR_D1_W32,
@@ -1022,8 +1024,12 @@ pub(crate) fn write_config(
 ) -> Result<(), ArtifactError> {
     match descriptor {
         BuiltinConfigDescriptorV1::Fri(config) => {
-            writer.write_u8(0)?;
+            // Tag zero keeps the historical zero-batch encoding byte-identical.
+            writer.write_u8(if config.batch_pow_bits() == 0 { 0 } else { 2 })?;
             writer.write_u16(config.suite().as_u16())?;
+            if config.batch_pow_bits() != 0 {
+                writer.write_u32(config.batch_pow_bits())?;
+            }
             writer.write_u32(config.log_blowup())?;
             writer.write_u32(config.log_final_poly_len())?;
             writer.write_u32(config.max_log_arity())?;
@@ -1072,19 +1078,33 @@ pub(crate) fn read_config(
         return Err(ArtifactError::NonCanonicalMetadata);
     }
     let descriptor = match tag {
-        0 => BuiltinConfigDescriptorV1::Fri(FriConfigV1::new(
-            expected_suite,
-            reader.read_u32()?,
-            reader.read_u32()?,
-            reader.read_u32()?,
-            reader.read_u32()?,
-            reader.read_u32()?,
-            reader.read_u32()?,
-            reader.read_u32()?,
-            reader.read_u32()?,
-            reader.read_u32()?,
-            reader.read_u32()?,
-        )),
+        0 | 2 => {
+            let batch_pow_bits = if tag == 2 {
+                let bits = reader.read_u32()?;
+                if bits == 0 {
+                    return Err(ArtifactError::NonCanonicalMetadata);
+                }
+                bits
+            } else {
+                0
+            };
+            BuiltinConfigDescriptorV1::Fri(
+                FriConfigV1::new(
+                    expected_suite,
+                    reader.read_u32()?,
+                    reader.read_u32()?,
+                    reader.read_u32()?,
+                    reader.read_u32()?,
+                    reader.read_u32()?,
+                    reader.read_u32()?,
+                    reader.read_u32()?,
+                    reader.read_u32()?,
+                    reader.read_u32()?,
+                    reader.read_u32()?,
+                )
+                .with_batch_pow_bits(batch_pow_bits),
+            )
+        }
         1 => {
             let starting_log_inv_rate = reader.read_u32()?;
             let round_log_inv_rates = match reader.read_u8()? {
@@ -1307,6 +1327,28 @@ mod tests {
             20,
             3,
         ))
+    }
+
+    #[test]
+    fn config_codec_binds_positive_batch_pow_without_changing_zero_encoding() {
+        let BuiltinConfigDescriptorV1::Fri(zero) = ordinary() else {
+            unreachable!()
+        };
+        let positive = BuiltinConfigDescriptorV1::Fri(zero.with_batch_pow_bits(16));
+        let mut writer = Writer::new(1024);
+        write_config(&mut writer, &positive).unwrap();
+        let bytes = writer.finish().unwrap();
+        assert_eq!(bytes[0], 2);
+        let limits = ArtifactLimits::default();
+        let mut reader = Reader::new(&bytes, &limits);
+        assert_eq!(read_config(&mut reader, zero.suite()).unwrap(), positive);
+        let mut noncanonical = bytes;
+        noncanonical[3..7].fill(0);
+        let mut reader = Reader::new(&noncanonical, &limits);
+        assert!(matches!(
+            read_config(&mut reader, zero.suite()),
+            Err(ArtifactError::NonCanonicalMetadata)
+        ));
     }
 
     #[test]
