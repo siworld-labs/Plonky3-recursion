@@ -176,16 +176,24 @@ fn selected_hiding_workers(
     if let Some(workers) = explicit {
         return Ok(workers);
     }
-    extern crate std;
-    match std::env::var("SIWORLD_COMPOSITION_HIDING_WORKERS") {
-        Ok(value) => parse_hiding_worker_override(Some(&value)),
-        Err(std::env::VarError::NotPresent) => parse_hiding_worker_override(None),
-        Err(std::env::VarError::NotUnicode(_)) => Err(BatchStarkProverError::Prove(
-            "hiding proof worker override must be one or two".into(),
-        )),
+    #[cfg(not(feature = "parallel"))]
+    {
+        Ok(HidingProofWorkers::default())
+    }
+    #[cfg(feature = "parallel")]
+    {
+        extern crate std;
+        match std::env::var("SIWORLD_COMPOSITION_HIDING_WORKERS") {
+            Ok(value) => parse_hiding_worker_override(Some(&value)),
+            Err(std::env::VarError::NotPresent) => parse_hiding_worker_override(None),
+            Err(std::env::VarError::NotUnicode(_)) => Err(BatchStarkProverError::Prove(
+                "hiding proof worker override must be one or two".into(),
+            )),
+        }
     }
 }
 
+#[cfg(any(feature = "parallel", test))]
 fn parse_hiding_worker_override(
     value: Option<&str>,
 ) -> Result<HidingProofWorkers, BatchStarkProverError> {
