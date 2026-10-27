@@ -51,8 +51,6 @@ const POSEIDON2_CONFIGS: [Poseidon2Config; 23] = [
     Poseidon2Config::BABY_BEAR_D4_W24,
     Poseidon2Config::BABY_BEAR_D4_W32,
     Poseidon2Config::KOALA_BEAR_D1_W16,
-    Poseidon2Config::KOALA_BEAR_D1_W24,
-    Poseidon2Config::KOALA_BEAR_D1_W24.for_challenger(),
     Poseidon2Config::KOALA_BEAR_D4_W16,
     Poseidon2Config::KOALA_BEAR_D4_W24,
     Poseidon2Config::KOALA_BEAR_D1_W32,
@@ -69,6 +67,8 @@ const POSEIDON2_CONFIGS: [Poseidon2Config; 23] = [
     Poseidon2Config::KOALA_BEAR_D4_W16.for_shared_challenger_table(),
     Poseidon2Config::KOALA_BEAR_D4_W24.for_shared_challenger_table(),
     Poseidon2Config::GOLDILOCKS_D2_W8.for_shared_challenger_table(),
+    Poseidon2Config::KOALA_BEAR_D1_W24,
+    Poseidon2Config::KOALA_BEAR_D1_W24.for_challenger(),
 ];
 
 impl BuiltinNpoV1 {
@@ -119,7 +119,7 @@ impl BuiltinNpoV1 {
             0x0100..=0x010b => Ok(Self::Poseidon1(
                 POSEIDON1_CONFIGS[usize::from(tag - 0x0100)],
             )),
-            0x0200..=0x0214 => Ok(Self::Poseidon2(
+            0x0200..=0x0216 => Ok(Self::Poseidon2(
                 POSEIDON2_CONFIGS[usize::from(tag - 0x0200)],
             )),
             _ => Err(ArtifactError::UnsupportedBuiltinAir(tag)),
@@ -1702,6 +1702,15 @@ mod tests {
         assert_eq!(
             POSEIDON2_CONFIGS[20].variant_name(),
             "goldilocks_d2_w8_shared"
+        );
+        assert_eq!(POSEIDON2_CONFIGS[21], Poseidon2Config::KOALA_BEAR_D1_W24);
+        assert_eq!(
+            POSEIDON2_CONFIGS[22],
+            Poseidon2Config::KOALA_BEAR_D1_W24.for_challenger()
+        );
+        assert_eq!(
+            BuiltinNpoV1::from_wire(0x0217),
+            Err(ArtifactError::UnsupportedBuiltinAir(0x0217))
         );
     }
 }

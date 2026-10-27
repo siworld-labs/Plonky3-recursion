@@ -8,7 +8,7 @@ Status: experimental implementation. Correctness tests do not establish security
 
 The recursive permutation uses 24 scalar circuit values embedded in the degree-eight extension. The witness bus constrains every extension coefficient; scalar values have seven zero coefficients. Binary compression absorbs all 24 scalar inputs and returns twelve designated scalar outputs. This representation does not permit the existing unsupported three-lane packed W24 geometry.
 
-The challenger has a dedicated table binding its initial capacity and squeeze chain. Ordinary MMCS permutations use a separate table. Interleaved MMCS work must not alter the challenger state. Descriptor and proof artifacts preserve all twelve external digest scalars and their canonical extension encoding.
+The challenger has a dedicated table binding its initial capacity and squeeze chain. Ordinary MMCS permutations use a separate table. Interleaved MMCS work must not alter the challenger state. Descriptor and proof artifacts preserve all twelve external digest scalars and their canonical extension encoding. Existing built-in AIR wire tags remain unchanged; scalar W24 and its challenger variant append at `0x0215` and `0x0216`. Unregistered following tags are rejected.
 
 ## Opening-batch proof of work
 
