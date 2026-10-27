@@ -1278,7 +1278,7 @@ mod tests {
     use core::mem::size_of;
 
     use p3_baby_bear::BabyBear;
-    use p3_circuit::ops::NpoTypeId;
+    use p3_circuit::ops::{NpoTypeId, Poseidon2Config};
     use p3_circuit::{StatementField, StatementSchema};
     use p3_circuit_prover::air::AluExtMulKind;
     use p3_circuit_prover::{
