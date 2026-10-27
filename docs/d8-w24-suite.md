@@ -12,7 +12,7 @@ The challenger has a dedicated table binding its initial capacity and squeeze ch
 
 ## Opening-batch proof of work
 
-`FriConfigV1::with_batch_pow_bits` carries batch-work difficulty through native configuration, the recursive verifier parameters, prepared runtime witnesses and portable artifacts. Difficulty is bound into the PCS transcript seed. Proof work is checked before sampling the opening-batch challenge, with identical native and circuit transcript order. A zero-difficulty configuration requires its canonical zero witness and preserves the legacy zero-work descriptor encoding. Query and commitment work remain separate parameters.
+`FriConfigV1::with_batch_pow_bits` carries batch-work difficulty through native configuration, the recursive verifier parameters, prepared runtime witnesses and portable artifacts. Difficulty is bound into the PCS transcript seed. Proof work is checked before sampling the opening-batch challenge, with identical native and circuit transcript order. A zero-difficulty configuration requires its canonical zero witness and preserves the legacy zero-work descriptor encoding. Query and commitment work remain separate parameters. This compatibility covers native proof and descriptor encoding, not regenerated recursive circuit, verification-key or prepared-artifact identities. Rebuilding may add nonce and zero-work constraints even at zero difficulty; regenerate and freeze the resulting circuits, keys and artifact hashes instead of assuming identity with an earlier verifier.
 
 Security analysis must justify credit for each enforced work site under the selected classical and quantum model. This implementation does not provide such approval or a composition theorem.
 
