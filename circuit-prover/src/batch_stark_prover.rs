@@ -127,28 +127,71 @@ impl<T: ?Sized> ProvingMaybeSync for T {}
 fn ensure_safe_hiding_parallelism(is_zk: bool) -> Result<(), BatchStarkProverError> {
     if is_zk && p3_maybe_rayon::PARALLEL_ENABLED && !cfg!(feature = "parallel") {
         return Err(BatchStarkProverError::Prove(
-            "hiding proofs with the Rayon backend require p3-circuit-prover/parallel; enable that feature to isolate native batch proving in a one-worker pool".into(),
+            "hiding proofs with the Rayon backend require p3-circuit-prover/parallel; enable that feature to isolate native batch proving in a bounded worker pool".into(),
         ));
     }
     Ok(())
 }
 
+/// Bounded worker policy for the isolated native hiding-proof pool.
+///
+/// A two-worker policy is opt-in and changes execution only. Consumers must
+/// review the hiding prover's RNG use before enabling parallel execution.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum HidingProofWorkers {
+    /// Preserve the default serial isolation policy.
+    #[default]
+    One,
+    /// Use two workers in the isolated native hiding-proof pool.
+    Two,
+}
+
+impl HidingProofWorkers {
+    /// Number of Rayon workers selected by this policy.
+    pub const fn workers(self) -> usize {
+        match self {
+            Self::One => 1,
+            Self::Two => 2,
+        }
+    }
+}
+
+impl TryFrom<usize> for HidingProofWorkers {
+    type Error = BatchStarkProverError;
+
+    fn try_from(workers: usize) -> Result<Self, Self::Error> {
+        match workers {
+            1 => Ok(Self::One),
+            2 => Ok(Self::Two),
+            _ => Err(BatchStarkProverError::Prove(
+                "hiding proof workers must be one or two".into(),
+            )),
+        }
+    }
+}
+
+fn selected_hiding_workers(
+    explicit: Option<HidingProofWorkers>,
+) -> Result<HidingProofWorkers, BatchStarkProverError> {
+    Ok(explicit.unwrap_or_default())
+}
+
 #[cfg(feature = "parallel")]
 fn run_native_proof_in_pool<R: Send>(
     is_zk: bool,
+    hiding_workers: Option<HidingProofWorkers>,
     prove: impl FnOnce() -> R + Send,
 ) -> Result<R, BatchStarkProverError> {
     if is_zk {
-        // Hiding batch proofs run on one Rayon worker and give up native batch parallelism.
-        // TODO: drop this pool once hiding batch proving is re-validated under Rayon;
-        // the pinned Plonky3 revision draws hiding randomness outside its parallel
-        // work (Plonky3#2368).
+        // Keep hiding work isolated from the caller's Rayon pool. Serial
+        // execution remains the default; parallel hiding is an explicit policy
+        // requiring review of native randomness use (Plonky3#2368).
         let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(1)
+            .num_threads(selected_hiding_workers(hiding_workers)?.workers())
             .build()
             .map_err(|error| {
                 BatchStarkProverError::Prove(format!(
-                    "failed to create the one-worker pool for hiding batch proving: {error}"
+                    "failed to create the isolated pool for hiding batch proving: {error}"
                 ))
             })?;
         let dispatch = tracing::dispatcher::get_default(Clone::clone);
@@ -162,16 +205,22 @@ fn run_native_proof_in_pool<R: Send>(
 
 #[cfg(not(feature = "parallel"))]
 fn run_native_proof_in_pool<R>(
-    _is_zk: bool,
+    is_zk: bool,
+    hiding_workers: Option<HidingProofWorkers>,
     prove: impl FnOnce() -> R,
 ) -> Result<R, BatchStarkProverError> {
+    if is_zk && selected_hiding_workers(hiding_workers)? != HidingProofWorkers::One {
+        return Err(BatchStarkProverError::Prove(
+            "two hiding proof workers require p3-circuit-prover/parallel".into(),
+        ));
+    }
     Ok(prove())
 }
 
 /// Returns the witness-bus dimension for a D=1 Poseidon config given the circuit's extension
 /// degree, or `None` if the scale is not supported.
 ///
-/// Currently supported: 1 (base-field circuit) and 5 (KoalaBear quintic).
+/// Currently supported: 1 (base-field circuit), 5 (KoalaBear quintic), and 8 (D8 scalar lift).
 #[inline]
 const fn poseidon_d1_witness_bus_dim(witness_ctl_scale: u32) -> Option<u32> {
     match witness_ctl_scale {
@@ -740,6 +789,8 @@ where
     SC: StarkGenericConfig + 'static,
 {
     config: SC,
+    /// Explicit execution policy; absence preserves serial isolation.
+    hiding_workers: Option<HidingProofWorkers>,
     table_packing: TablePacking,
     /// Variant used for the primitive ALU AIR.
     alu_variant: AirVariant,
@@ -1794,11 +1845,23 @@ where
     pub fn new(config: SC) -> Self {
         Self {
             config,
+            hiding_workers: None,
             table_packing: TablePacking::default(),
             alu_variant: AirVariant::Optimized,
             non_primitive_provers: Vec::new(),
             debug_lookups: false,
         }
+    }
+
+    /// Select the isolated native hiding-proof worker policy.
+    ///
+    /// Serial isolation remains the default. Two workers require the `parallel`
+    /// feature and a separate review of the native hiding prover's RNG use.
+    /// The policy does not change verification or non-hiding caller pools.
+    #[must_use]
+    pub const fn with_hiding_workers(mut self, workers: HidingProofWorkers) -> Self {
+        self.hiding_workers = Some(workers);
+        self
     }
 
     /// Override the default [`TablePacking`] configuration (builder-style).
@@ -2509,9 +2572,10 @@ where
                 check_lookups(&debug_instances);
             }
 
-            let native_proof = run_native_proof_in_pool(self.config.is_zk() != 0, || {
-                p3_batch_stark::prove_batch(&self.config, &instances, effective_prover_data)
-            })?;
+            let native_proof =
+                run_native_proof_in_pool(self.config.is_zk() != 0, self.hiding_workers, || {
+                    p3_batch_stark::prove_batch(&self.config, &instances, effective_prover_data)
+                })?;
             native_proof.map_err(|e| BatchStarkProverError::Prove(format!("{e:?}")))?
         };
 

@@ -32,3 +32,7 @@ cargo test --locked --release -p p3-recursion --test prepared_recursion positive
 ```
 
 The D8 integration group covers native/circuit transcript agreement, interleaved MMCS operations, both compression directions, suite identity, base/extension statement exports, full/prepared positive-work proofs, modified witnesses and opening claims, and nonconstant scalar coefficients. Run the complete upstream required checks in addition to these focused groups.
+
+## Hiding proof worker policy
+
+`BatchStarkProver::with_hiding_workers` selects `HidingProofWorkers::One` or `HidingProofWorkers::Two`. Serial isolation remains the default. Two workers require the `parallel` feature; requesting them without support is rejected. The isolated pool preserves tracing context, and non-hiding proofs retain the caller's pool. The policy changes execution only and does not alter verification parameters. Any opt-in parallel hiding use requires independent review of RNG derivation and native proving code.
