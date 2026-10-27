@@ -36,3 +36,7 @@ The D8 integration group covers native/circuit transcript agreement, interleaved
 ## Hiding proof worker policy
 
 `BatchStarkProver::with_hiding_workers` selects `HidingProofWorkers::One` or `HidingProofWorkers::Two`. Serial isolation remains the default. Two workers require the `parallel` feature; requesting them without support is rejected. The isolated pool preserves tracing context, and non-hiding proofs retain the caller's pool. The policy changes execution only and does not alter verification parameters. Any opt-in parallel hiding use requires independent review of RNG derivation and native proving code.
+
+## Downstream compatibility override
+
+This downstream branch additionally retains `SIWORLD_COMPOSITION_HIDING_WORKERS` for existing experiment launchers. When no typed policy is supplied, an absent value or `1` selects one worker, `2` selects two, and every other value is rejected. A typed policy takes precedence. The override is separate from the upstream suite changes and is not a protocol or verifier parameter. Native transaction and settlement proofs use `p3-uni-stark` and do not call this recursive batch-prover pool.

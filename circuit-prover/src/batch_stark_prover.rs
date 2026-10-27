@@ -173,7 +173,29 @@ impl TryFrom<usize> for HidingProofWorkers {
 fn selected_hiding_workers(
     explicit: Option<HidingProofWorkers>,
 ) -> Result<HidingProofWorkers, BatchStarkProverError> {
-    Ok(explicit.unwrap_or_default())
+    if let Some(workers) = explicit {
+        return Ok(workers);
+    }
+    extern crate std;
+    match std::env::var("SIWORLD_COMPOSITION_HIDING_WORKERS") {
+        Ok(value) => parse_hiding_worker_override(Some(&value)),
+        Err(std::env::VarError::NotPresent) => parse_hiding_worker_override(None),
+        Err(std::env::VarError::NotUnicode(_)) => Err(BatchStarkProverError::Prove(
+            "hiding proof worker override must be one or two".into(),
+        )),
+    }
+}
+
+fn parse_hiding_worker_override(
+    value: Option<&str>,
+) -> Result<HidingProofWorkers, BatchStarkProverError> {
+    match value {
+        None | Some("1") => Ok(HidingProofWorkers::One),
+        Some("2") => Ok(HidingProofWorkers::Two),
+        _ => Err(BatchStarkProverError::Prove(
+            "hiding proof worker override must be one or two".into(),
+        )),
+    }
 }
 
 #[cfg(feature = "parallel")]

@@ -3323,10 +3323,6 @@ fn hiding_worker_policy_defaults_to_one_and_rejects_other_counts() {
         assert!(HidingProofWorkers::try_from(workers).is_err());
     }
     assert_eq!(
-        selected_hiding_workers(None).unwrap(),
-        HidingProofWorkers::One
-    );
-    assert_eq!(
         selected_hiding_workers(Some(HidingProofWorkers::Two)).unwrap(),
         HidingProofWorkers::Two
     );
@@ -3369,4 +3365,23 @@ fn hiding_worker_policy_requires_parallel_support_for_two_workers() {
         run_native_proof_in_pool(false, Some(HidingProofWorkers::Two), || 7).unwrap(),
         7
     );
+}
+
+#[test]
+fn hiding_worker_environment_override_is_bounded() {
+    assert_eq!(
+        parse_hiding_worker_override(None).unwrap(),
+        HidingProofWorkers::One
+    );
+    assert_eq!(
+        parse_hiding_worker_override(Some("1")).unwrap(),
+        HidingProofWorkers::One
+    );
+    assert_eq!(
+        parse_hiding_worker_override(Some("2")).unwrap(),
+        HidingProofWorkers::Two
+    );
+    for invalid in ["", "0", "3", " 2", "2 ", "02", "all"] {
+        assert!(parse_hiding_worker_override(Some(invalid)).is_err());
+    }
 }
